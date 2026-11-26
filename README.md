@@ -79,7 +79,7 @@ npm run test        # 15/15 Vitest tests against @midnight-ntwrk/compact-runtime
 ```bash
 cd web
 npm install
-npm run test        # 2/2 web WASM engine tests
+npm run test        # 6/6 web WASM engine, leakage-scanner & attestation tests
 npm run build       # builds dist/ with real midnight_onchain_runtime_wasm_bg.wasm
 npm run dev         # opens live interactive console at http://localhost:5173
 ```
@@ -90,13 +90,13 @@ npm run dev         # opens live interactive console at http://localhost:5173
 
 - **Compact Compiler (`0.36.1`):** `6/6` circuits compiled cleanly (`contract/src/managed/veilfactor/keys/*.{prover,verifier}` & `zkir/*`).
 - **Contract Test Suite (`vitest`):** **`15/15 PASS`** covering policy governance, deterministic privacy-preserving commitments, zero-leakage assertions on serialized public state, cross-wallet/cross-salt double-pledge blocking, concentration covenant breaches, Tier-C 80% guardrails, impostor factor/auditor rejection, +\$1 tampered disclosure seal rejection, bilateral dispute freeze, and 4-role domain separation.
-- **Web WASM Console (`vite` + Headless Chrome QA):** **`2/2 PASS`** unit tests + live Headless Chrome `1440×900` E2E execution of the real WASM bundle (`0` runtime errors, `0px` horizontal overflow across all 4 tabs & pitch deck).
+- **Web WASM Console (`vite` + Headless Chrome QA):** **`6/6 PASS`** unit tests (21/21 total) covering real browser WASM execution, the **Midnight Ledger-9 Public State Zero-Leakage Byte Scanner** (`scanPublicLedgerZeroLeakage` — scanning all 7 private witness fields for `0/7 leaks`), and verifiable compliance attestation JSON export, plus live Headless Chrome `1440×900` E2E verification (`0` runtime errors, `0px` horizontal overflow across all 4 tabs & pitch deck).
 
 ---
 
 ## 6. Wave 3 Changelog & Roadmap
 
-- **Wave 3 Delivery:** First full release — engineered `veilfactor.compact` (6 provable circuits + 8 pure hash/key helpers), `VeilFactorSimulator` on Ledger-9 (`compact-runtime@0.21.0`), `15/15` automated tests, live browser-WASM dual-ledger interactive dApp, 7-slide pitch deck (`web/public/deck.html`), and 56s HD demo video.
+- **Wave 3 Delivery:** Full release — engineered `veilfactor.compact` (6 provable circuits + 8 pure hash/key helpers), `VeilFactorSimulator` on Ledger-9 (`compact-runtime@0.21.0`), `21/21` automated tests (`15` contract + `6` web WASM), live browser-WASM dual-ledger interactive dApp with real-time **Public State Zero-Leakage Byte Scanner** & 1-click **Compliance Attestation JSON Export**, 7-slide pitch deck (`web/public/deck.html`), and 56s HD demo video.
 - **Next Milestones (Midnight Build Club):** Midnight Preprod live deployment with Lace DApp Connector v4 + Midnight proof server, encrypted off-chain auditor dossier vault, and pilot ERP webhooks for B2B factoring desks.
 
 ## License
