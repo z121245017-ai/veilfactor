@@ -1,5 +1,7 @@
 # VeilFactor
 
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+
 **Zero-Knowledge Invoice Double-Pledge Prevention, Confidential Underwriting Covenants & Auditor-Scoped Selective Disclosure on Midnight.**
 
 > Built for the **Midnight Buildathon (Wave 3)** · Licensed under **Apache License 2.0** · Compiled with **`compact 0.36.1`** (`pragma language_version >= 0.28.0;`, Ledger-9 `@midnight-ntwrk/compact-runtime@0.21.0`).
