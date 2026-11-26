@@ -6,7 +6,8 @@
 
 - **Live Interactive WASM Console:** https://z121245017-ai.github.io/veilfactor/
 - **Interactive Pitch Slide Deck:** https://z121245017-ai.github.io/veilfactor/deck.html
-- **HD Walkthrough Video (56s):** `docs/demo.mp4` (and jsDelivr CDN link in release/submission kit)
+- **HD Walkthrough Video (YouTube):** https://youtu.be/KP9GJiiqSoo (local copy: `docs/demo.mp4`)
+- **AKINDO Wave 3 Submission:** https://app.akindo.io/communities/o6qvaZ91nTq2LLJ38/products/xKqzmON1ZHvV7k3j
 
 ---
 
