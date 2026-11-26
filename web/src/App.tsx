@@ -5,10 +5,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   DealStatus,
   amountBandLabel,
+  buildComplianceAttestationJson,
   createBootstrappedEngine,
   dealStatusLabel,
   extractLedgerDeals,
   riskTierLabel,
+  scanPublicLedgerZeroLeakage,
   sha256,
   shortHex,
   toHex,
@@ -88,6 +90,27 @@ export function App() {
   }, [deals, selectedDealHex]);
 
   const activeDossier = activeDeal ? dossiers[activeDeal.nullifierHex] : undefined;
+
+  const leakageAudit = useMemo(() => {
+    if (!ledger || !activeDossier) return null;
+    return scanPublicLedgerZeroLeakage(ledger, activeDossier);
+  }, [ledger, activeDossier]);
+
+  function handleExportComplianceReceipt() {
+    if (!activeDeal) return;
+    const payload = buildComplianceAttestationJson(activeDeal, activeDossier, leakageAudit);
+    const blob = new Blob([payload], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `veilfactor-attestation-${activeDeal.nullifierHex.slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setBanner({
+      ok: true,
+      text: `Exported verifiable Midnight Ledger-9 compliance attestation receipt for 0x${activeDeal.nullifierHex.slice(0, 10)}…`,
+    });
+  }
 
   function appendTrace(ev: Omit<TraceEvent, "id" | "ts">) {
     setTraces((prev) => [{ ...ev, id: prev.length + 1, ts: nowLabel() }, ...prev]);
@@ -827,6 +850,35 @@ export function App() {
                 <span>Publicly Revealed Raw Amount</span>
                 <code style={{ color: "#6ee7b7" }}>NONE (Zero-Knowledge)</code>
               </div>
+            </div>
+            {leakageAudit && (
+              <div className="diff-box priv" style={{ marginTop: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <strong style={{ fontSize: 12 }}>Live Ledger-9 Public State Zero-Leakage Scan</strong>
+                  <span className={`tag ${leakageAudit.allClear ? "ok" : "err"}`}>
+                    {leakageAudit.allClear
+                      ? `0/${leakageAudit.checks.length} LEAKS · ${leakageAudit.serializedCharsScanned}B SCANNED`
+                      : `${leakageAudit.leaksFound} LEAKS`}
+                  </span>
+                </div>
+                {leakageAudit.checks.map((c) => (
+                  <div key={c.secretLabel} className="kv">
+                    <span>{c.secretLabel}</span>
+                    <code style={{ color: c.presentOnPublicLedger ? "#fca5a5" : "#6ee7b7" }}>
+                      {c.presentOnPublicLedger ? "LEAKED" : "HIDDEN (0 matches)"}
+                    </code>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="actions">
+              <button
+                className="btn btn-secondary"
+                disabled={!activeDeal}
+                onClick={handleExportComplianceReceipt}
+              >
+                Export Compliance Attestation (.json)
+              </button>
             </div>
           </div>
         </div>

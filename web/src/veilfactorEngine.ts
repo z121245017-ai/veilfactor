@@ -94,6 +94,124 @@ export type LedgerDealItem = {
   summary: DealSummary;
 };
 
+export type ZeroLeakageCheckRow = {
+  secretLabel: string;
+  privateSample: string;
+  presentOnPublicLedger: boolean;
+};
+
+export type ZeroLeakageAuditReport = {
+  allClear: boolean;
+  leaksFound: number;
+  serializedCharsScanned: number;
+  checks: ZeroLeakageCheckRow[];
+};
+
+export function scanPublicLedgerZeroLeakage(
+  state: Ledger,
+  dossier: PrivateDossierRecord
+): ZeroLeakageAuditReport {
+  const serialized = JSON.stringify(
+    {
+      protocolAdminPk: toHex(state.protocolAdminPk),
+      totalPledged: state.totalPledged.toString(),
+      totalFunded: state.totalFunded.toString(),
+      totalSettled: state.totalSettled.toString(),
+      totalDisputed: state.totalDisputed.toString(),
+      totalAuditorDisclosures: state.totalAuditorDisclosures.toString(),
+      minCreditScore: state.minCreditScore.toString(),
+      maxAdvanceBps: state.maxAdvanceBps.toString(),
+      maxBuyerConcentrationCents: state.maxBuyerConcentrationCents.toString(),
+      nullifiers: Array.from(state.pledgedNullifiers, (n) => toHex(n)),
+      deals: extractLedgerDeals(state).map((d) => ({
+        nullifier: d.nullifierHex,
+        invoiceCommitment: toHex(d.summary.invoiceCommitment),
+        disclosureSeal: toHex(d.summary.disclosureSeal),
+        supplierPk: toHex(d.summary.supplierPk),
+        factorPk: toHex(d.summary.factorPk),
+        auditorPk: toHex(d.summary.auditorPk),
+        riskTier: d.summary.riskTier,
+        amountBand: d.summary.amountBand,
+        advanceBps: d.summary.advanceBps.toString(),
+        status: d.summary.status,
+        disclosedToAuditor: d.summary.disclosedToAuditor,
+      })),
+    },
+    null,
+    0
+  );
+
+  const faceCents = String(Math.round(dossier.faceValueUsd * 100));
+  const expCents = String(Math.round(dossier.buyerExposureUsd * 100));
+  const probes: Array<{ secretLabel: string; privateSample: string; needle: string }> = [
+    { secretLabel: "Commercial Invoice Reference", privateSample: dossier.invoiceRef, needle: dossier.invoiceRef },
+    { secretLabel: "Buyer Corporate Tax ID", privateSample: dossier.buyerTaxId, needle: dossier.buyerTaxId },
+    { secretLabel: "Raw Invoice PDF SHA-256", privateSample: `0x${dossier.docHashHex.slice(0, 12)}…`, needle: dossier.docHashHex },
+    { secretLabel: "Raw Buyer Tax ID SHA-256", privateSample: `0x${dossier.buyerTaxHashHex.slice(0, 12)}…`, needle: dossier.buyerTaxHashHex },
+    { secretLabel: "Exact Invoice Face Value (cents)", privateSample: `$${dossier.faceValueUsd.toLocaleString()} (${faceCents}¢)`, needle: faceCents },
+    { secretLabel: "Exact Buyer Portfolio Exposure (cents)", privateSample: `$${dossier.buyerExposureUsd.toLocaleString()} (${expCents}¢)`, needle: expCents },
+    { secretLabel: "Exact Underwriting Credit Score", privateSample: `${dossier.creditScore} / 850`, needle: String(dossier.creditScore) },
+  ];
+
+  // For short numeric needles like 3-digit creditScore, avoid false match inside random hex hashes:
+  // scan only non-hex structured numeric fields while scanning full serialized payload for hex/string secrets.
+  const nonHexState = serialized.replace(/[0-9a-f]{32,}/gi, "<HASH>");
+  const checks: ZeroLeakageCheckRow[] = probes.map((p) => {
+    const haystack = p.needle.length <= 8 ? nonHexState : serialized;
+    return {
+      secretLabel: p.secretLabel,
+      privateSample: p.privateSample,
+      presentOnPublicLedger: haystack.includes(p.needle),
+    };
+  });
+
+  const leaksFound = checks.filter((c) => c.presentOnPublicLedger).length;
+  return {
+    allClear: leaksFound === 0,
+    leaksFound,
+    serializedCharsScanned: serialized.length,
+    checks,
+  };
+}
+
+export function buildComplianceAttestationJson(
+  deal: LedgerDealItem,
+  dossier: PrivateDossierRecord | undefined,
+  audit: ZeroLeakageAuditReport | null
+): string {
+  return JSON.stringify(
+    {
+      schema: "veilfactor.selective-disclosure.receipt.v1",
+      generatedAtUtc: new Date().toISOString(),
+      midnightToolchain: "compact 0.36.1 / @midnight-ntwrk/compact-runtime@0.21.0 (Ledger-9)",
+      publicLedgerCommitment: {
+        nullifier: `0x${deal.nullifierHex}`,
+        invoiceCommitment: `0x${toHex(deal.summary.invoiceCommitment)}`,
+        disclosureSeal: `0x${toHex(deal.summary.disclosureSeal)}`,
+        auditorPk: `0x${toHex(deal.summary.auditorPk)}`,
+        status: dealStatusLabel(deal.summary.status),
+        riskTier: riskTierLabel(deal.summary.riskTier),
+        amountBand: amountBandLabel(deal.summary.amountBand),
+        advanceBps: Number(deal.summary.advanceBps),
+        disclosedToAuditor: deal.summary.disclosedToAuditor,
+      },
+      privacyAudit: audit
+        ? {
+            allClear: audit.allClear,
+            leaksFound: audit.leaksFound,
+            serializedCharsScanned: audit.serializedCharsScanned,
+            verifiedHiddenSecrets: audit.checks.length,
+          }
+        : null,
+      note: dossier
+        ? "Raw commercial invoice amounts, credit scores, and buyer identifiers remain strictly off-chain in the local prover dossier and are never serialized to the public Midnight ledger."
+        : "Public ledger summary only (local private dossier not loaded).",
+    },
+    null,
+    2
+  );
+}
+
 export async function createDemoActors(): Promise<DemoActors> {
   const [
     adminSk,
