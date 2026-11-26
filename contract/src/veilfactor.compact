@@ -1,0 +1,385 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 VeilFactor Contributors
+//
+// VeilFactor: Zero-Knowledge Invoice Double-Pledge Prevention,
+// Confidential Underwriting Covenants & Selective Auditor Disclosure on Midnight.
+
+pragma language_version >= 0.28.0;
+
+import CompactStandardLibrary;
+
+export enum DealStatus {
+  PLEDGED,
+  FUNDED,
+  SETTLED,
+  DISPUTED
+}
+
+export enum RiskTier {
+  TIER_A_PRIME,
+  TIER_B_STANDARD,
+  TIER_C_ENHANCED
+}
+
+export enum AmountBand {
+  BAND_MICRO,
+  BAND_MID,
+  BAND_INSTITUTIONAL
+}
+
+export struct DealSummary {
+  supplierPk: Bytes<32>,
+  factorPk: Bytes<32>,
+  auditorPk: Bytes<32>,
+  invoiceCommitment: Bytes<32>,
+  disclosureSeal: Bytes<32>,
+  riskTier: RiskTier,
+  amountBand: AmountBand,
+  advanceBps: Uint<16>,
+  status: DealStatus,
+  disclosedToAuditor: Boolean
+}
+
+// ============================================================================
+// Public Midnight Ledger State (zero raw invoice/buyer/score/amount leakage)
+// ============================================================================
+export ledger protocolAdminPk: Bytes<32>;
+export ledger minCreditScore: Uint<16>;
+export ledger maxAdvanceBps: Uint<16>;
+export ledger maxBuyerConcentrationCents: Uint<64>;
+export ledger pledgedNullifiers: Set<Bytes<32>>;
+export ledger deals: Map<Bytes<32>, DealSummary>;
+export ledger totalPledged: Counter;
+export ledger totalFunded: Counter;
+export ledger totalSettled: Counter;
+export ledger totalDisputed: Counter;
+export ledger totalAuditorDisclosures: Counter;
+
+// ============================================================================
+// Private Witnesses (local prover only — never published to public ledger)
+// ============================================================================
+witness localSecretKey(): Bytes<32>;
+witness localInvoiceDocHash(): Bytes<32>;
+witness localBuyerTaxHash(): Bytes<32>;
+witness localFaceValueCents(): Uint<64>;
+witness localBuyerExposureCents(): Uint<64>;
+witness localCreditScore(): Uint<16>;
+witness localInvoiceSalt(): Bytes<32>;
+witness localAuditorSecretKey(): Bytes<32>;
+
+// ============================================================================
+// Pure Cryptographic Commitment & Nullifier Circuits
+// ============================================================================
+export circuit deriveRolePk(sk: Bytes<32>, domainTag: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([domainTag, sk]);
+}
+
+export circuit deriveAdminPk(sk: Bytes<32>): Bytes<32> {
+  return deriveRolePk(sk, pad(32, "veilfactor:admin:v1"));
+}
+
+export circuit deriveSupplierPk(sk: Bytes<32>): Bytes<32> {
+  return deriveRolePk(sk, pad(32, "veilfactor:supplier:v1"));
+}
+
+export circuit deriveFactorPk(sk: Bytes<32>): Bytes<32> {
+  return deriveRolePk(sk, pad(32, "veilfactor:factor:v1"));
+}
+
+export circuit deriveAuditorPk(sk: Bytes<32>): Bytes<32> {
+  return deriveRolePk(sk, pad(32, "veilfactor:auditor:v1"));
+}
+
+// Deterministic invoice nullifier independent of supplier wallet or salt:
+// pledging the same (docHash, buyerTaxHash) to a second lender collides and reverts.
+export circuit computeInvoiceNullifier(
+  docHash: Bytes<32>,
+  buyerTaxHash: Bytes<32>
+): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([
+    pad(32, "veilfactor:nullifier:v1"),
+    docHash,
+    buyerTaxHash
+  ]);
+}
+
+// Salted private commitment binding commercial invoice terms without revealing them.
+export circuit computeInvoiceCommitment(
+  docHash: Bytes<32>,
+  buyerTaxHash: Bytes<32>,
+  faceValueCents: Uint<64>,
+  salt: Bytes<32>
+): Bytes<32> {
+  return persistentHash<Vector<5, Bytes<32>>>([
+    pad(32, "veilfactor:commit:v1"),
+    docHash,
+    buyerTaxHash,
+    (faceValueCents as Field) as Bytes<32>,
+    salt
+  ]);
+}
+
+// Auditor-scoped selective disclosure seal bound to exact terms and designated auditor.
+export circuit computeDisclosureSeal(
+  invoiceCommitment: Bytes<32>,
+  auditorPk: Bytes<32>,
+  faceValueCents: Uint<64>,
+  creditScore: Uint<16>
+): Bytes<32> {
+  return persistentHash<Vector<5, Bytes<32>>>([
+    pad(32, "veilfactor:audit-seal:v1"),
+    invoiceCommitment,
+    auditorPk,
+    (faceValueCents as Field) as Bytes<32>,
+    (creditScore as Field) as Bytes<32>
+  ]);
+}
+
+// ============================================================================
+// Constructor — initializes global underwriting guardrails & admin PK
+// ============================================================================
+constructor(
+  initMinCreditScore: Uint<16>,
+  initMaxAdvanceBps: Uint<16>,
+  initMaxBuyerConcentrationCents: Uint<64>
+) {
+  assert(initMinCreditScore >= 500 && initMinCreditScore <= 850, "Invalid credit score floor");
+  assert(initMaxAdvanceBps >= 5000 && initMaxAdvanceBps <= 9500, "Invalid max advance bps");
+  assert(initMaxBuyerConcentrationCents >= 1000000, "Concentration cap must be >= $10,000");
+
+  protocolAdminPk = disclose(deriveAdminPk(localSecretKey()));
+  minCreditScore = disclose(initMinCreditScore);
+  maxAdvanceBps = disclose(initMaxAdvanceBps);
+  maxBuyerConcentrationCents = disclose(initMaxBuyerConcentrationCents);
+}
+
+// ============================================================================
+// 1. Admin Policy Governance Circuit
+// ============================================================================
+export circuit updateRiskPolicy(
+  newMinCreditScore: Uint<16>,
+  newMaxAdvanceBps: Uint<16>,
+  newMaxBuyerConcentrationCents: Uint<64>
+): [] {
+  const callerAdminPk = deriveAdminPk(localSecretKey());
+  assert(callerAdminPk == protocolAdminPk, "Unauthorized: caller is not protocol admin");
+  assert(newMinCreditScore >= 500 && newMinCreditScore <= 850, "Credit score floor out of range");
+  assert(newMaxAdvanceBps >= 5000 && newMaxAdvanceBps <= 9500, "Max advance bps out of range");
+  assert(newMaxBuyerConcentrationCents >= 1000000, "Concentration cap must be >= $10,000");
+
+  minCreditScore = disclose(newMinCreditScore);
+  maxAdvanceBps = disclose(newMaxAdvanceBps);
+  maxBuyerConcentrationCents = disclose(newMaxBuyerConcentrationCents);
+}
+
+// ============================================================================
+// 2. Zero-Knowledge Invoice Pledge & Anti-Double-Financing Circuit
+// ============================================================================
+export circuit pledgeInvoice(
+  factorPk: Bytes<32>,
+  auditorPk: Bytes<32>,
+  requestedAdvanceBps: Uint<16>
+): Bytes<32> {
+  const supplierPk = deriveSupplierPk(localSecretKey());
+  const docHash = localInvoiceDocHash();
+  const buyerTaxHash = localBuyerTaxHash();
+  const faceValue = localFaceValueCents();
+  const existingExposure = localBuyerExposureCents();
+  const creditScore = localCreditScore();
+  const salt = localInvoiceSalt();
+
+  // 2a. Private underwriting assertions (evaluated strictly in ZK)
+  assert(faceValue >= 100000, "Invoice face value below $1,000 minimum");
+  assert(faceValue <= 500000000, "Invoice face value exceeds $5,000,000 maximum");
+  assert(creditScore >= minCreditScore, "Private credit score below policy floor");
+  assert(creditScore <= 850, "Private credit score exceeds 850 ceiling");
+  assert(requestedAdvanceBps >= 5000, "Advance rate below 50% minimum");
+  assert(requestedAdvanceBps <= maxAdvanceBps, "Advance rate exceeds global policy ceiling");
+
+  // 2b. Private buyer concentration covenant (overflow-safe addition check)
+  assert(existingExposure <= maxBuyerConcentrationCents, "Existing buyer exposure already exceeds cap");
+  assert(
+    faceValue <= (maxBuyerConcentrationCents - existingExposure),
+    "Buyer concentration covenant breached"
+  );
+
+  // 2c. Coarse risk-tier classification & tier-specific advance guardrail
+  const riskTier =
+    creditScore >= 760
+      ? RiskTier.TIER_A_PRIME
+      : (creditScore >= 680 ? RiskTier.TIER_B_STANDARD : RiskTier.TIER_C_ENHANCED);
+
+  if (riskTier == RiskTier.TIER_C_ENHANCED) {
+    assert(requestedAdvanceBps <= 8000, "Tier C invoices capped at 80% advance rate");
+  }
+
+  // 2d. Coarse invoice amount band (hides exact commercial invoice figure)
+  const amountBand =
+    faceValue < 2500000
+      ? AmountBand.BAND_MICRO
+      : (faceValue < 25000000 ? AmountBand.BAND_MID : AmountBand.BAND_INSTITUTIONAL);
+
+  // 2e. Deterministic anti-double-pledge nullifier check
+  const nullifier = disclose(computeInvoiceNullifier(docHash, buyerTaxHash));
+  assert(!pledgedNullifiers.member(nullifier), "Double-pledge blocked: invoice already financed");
+
+  const commitment = disclose(computeInvoiceCommitment(docHash, buyerTaxHash, faceValue, salt));
+  const disclosureSeal = disclose(computeDisclosureSeal(commitment, auditorPk, faceValue, creditScore));
+
+  pledgedNullifiers.insert(nullifier);
+  deals.insert(
+    nullifier,
+    DealSummary {
+      supplierPk: disclose(supplierPk),
+      factorPk: disclose(factorPk),
+      auditorPk: disclose(auditorPk),
+      invoiceCommitment: commitment,
+      disclosureSeal: disclosureSeal,
+      riskTier: disclose(riskTier),
+      amountBand: disclose(amountBand),
+      advanceBps: disclose(requestedAdvanceBps),
+      status: DealStatus.PLEDGED,
+      disclosedToAuditor: false
+    }
+  );
+  totalPledged.increment(1);
+  return nullifier;
+}
+
+// ============================================================================
+// 3. Factor Commitment / Funding Circuit
+// ============================================================================
+export circuit fundDeal(nullifier: Bytes<32>): [] {
+  const pubNullifier = disclose(nullifier);
+  assert(deals.member(pubNullifier), "Deal not found");
+  const current = deals.lookup(pubNullifier);
+  assert(current.status == DealStatus.PLEDGED, "Deal is not in PLEDGED state");
+
+  const callerFactorPk = deriveFactorPk(localSecretKey());
+  assert(callerFactorPk == current.factorPk, "Unauthorized: caller is not designated factor");
+
+  deals.insert(
+    pubNullifier,
+    DealSummary {
+      supplierPk: current.supplierPk,
+      factorPk: current.factorPk,
+      auditorPk: current.auditorPk,
+      invoiceCommitment: current.invoiceCommitment,
+      disclosureSeal: current.disclosureSeal,
+      riskTier: current.riskTier,
+      amountBand: current.amountBand,
+      advanceBps: current.advanceBps,
+      status: DealStatus.FUNDED,
+      disclosedToAuditor: current.disclosedToAuditor
+    }
+  );
+  totalFunded.increment(1);
+}
+
+// ============================================================================
+// 4. Repayment Settlement Circuit (nullifier stays permanently spent)
+// ============================================================================
+export circuit settleDeal(nullifier: Bytes<32>): [] {
+  const pubNullifier = disclose(nullifier);
+  assert(deals.member(pubNullifier), "Deal not found");
+  const current = deals.lookup(pubNullifier);
+  assert(current.status == DealStatus.FUNDED, "Deal must be FUNDED before settlement");
+
+  const callerFactorPk = deriveFactorPk(localSecretKey());
+  assert(callerFactorPk == current.factorPk, "Unauthorized: only funding factor can settle");
+
+  deals.insert(
+    pubNullifier,
+    DealSummary {
+      supplierPk: current.supplierPk,
+      factorPk: current.factorPk,
+      auditorPk: current.auditorPk,
+      invoiceCommitment: current.invoiceCommitment,
+      disclosureSeal: current.disclosureSeal,
+      riskTier: current.riskTier,
+      amountBand: current.amountBand,
+      advanceBps: current.advanceBps,
+      status: DealStatus.SETTLED,
+      disclosedToAuditor: current.disclosedToAuditor
+    }
+  );
+  totalSettled.increment(1);
+}
+
+// ============================================================================
+// 5. Bilateral Dispute Freeze Circuit (either supplier or factor)
+// ============================================================================
+export circuit flagDispute(nullifier: Bytes<32>): [] {
+  const pubNullifier = disclose(nullifier);
+  assert(deals.member(pubNullifier), "Deal not found");
+  const current = deals.lookup(pubNullifier);
+  assert(
+    current.status == DealStatus.PLEDGED || current.status == DealStatus.FUNDED,
+    "Only active PLEDGED or FUNDED deals can be disputed"
+  );
+
+  const callerSk = localSecretKey();
+  const isSupplier = deriveSupplierPk(callerSk) == current.supplierPk;
+  const isFactor = deriveFactorPk(callerSk) == current.factorPk;
+  assert(isSupplier || isFactor, "Unauthorized: caller is neither supplier nor factor");
+
+  deals.insert(
+    pubNullifier,
+    DealSummary {
+      supplierPk: current.supplierPk,
+      factorPk: current.factorPk,
+      auditorPk: current.auditorPk,
+      invoiceCommitment: current.invoiceCommitment,
+      disclosureSeal: current.disclosureSeal,
+      riskTier: current.riskTier,
+      amountBand: current.amountBand,
+      advanceBps: current.advanceBps,
+      status: DealStatus.DISPUTED,
+      disclosedToAuditor: current.disclosedToAuditor
+    }
+  );
+  totalDisputed.increment(1);
+}
+
+// ============================================================================
+// 6. Regulator / Auditor Selective Disclosure Verification Circuit
+// ============================================================================
+// Designated auditor proves off-chain dossier exact (faceValue, creditScore)
+// matches the on-chain disclosureSeal WITHOUT publishing exact terms publicly.
+export circuit attestSelectiveDisclosure(nullifier: Bytes<32>): Bytes<32> {
+  const pubNullifier = disclose(nullifier);
+  assert(deals.member(pubNullifier), "Deal not found");
+  const current = deals.lookup(pubNullifier);
+  assert(!current.disclosedToAuditor, "Deal already attested by auditor");
+
+  const callerAuditorPk = deriveAuditorPk(localAuditorSecretKey());
+  assert(callerAuditorPk == current.auditorPk, "Unauthorized: caller is not designated auditor");
+
+  const verifiedFaceValue = localFaceValueCents();
+  const verifiedCreditScore = localCreditScore();
+  const recomputedSeal = computeDisclosureSeal(
+    current.invoiceCommitment,
+    current.auditorPk,
+    verifiedFaceValue,
+    verifiedCreditScore
+  );
+  assert(recomputedSeal == current.disclosureSeal, "Selective disclosure seal mismatch");
+
+  deals.insert(
+    pubNullifier,
+    DealSummary {
+      supplierPk: current.supplierPk,
+      factorPk: current.factorPk,
+      auditorPk: current.auditorPk,
+      invoiceCommitment: current.invoiceCommitment,
+      disclosureSeal: current.disclosureSeal,
+      riskTier: current.riskTier,
+      amountBand: current.amountBand,
+      advanceBps: current.advanceBps,
+      status: current.status,
+      disclosedToAuditor: true
+    }
+  );
+  totalAuditorDisclosures.increment(1);
+  return current.disclosureSeal;
+}

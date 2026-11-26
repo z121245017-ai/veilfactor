@@ -1,0 +1,159 @@
+{
+  "manifest-version": "1",
+  "compiler-version": "0.36.1",
+  "compiler-commit": "7fa3a117c5e7efe9d2c51da04263e5f0b3509144",
+  "language-version": "0.28.0",
+  "runtime-version": "0.21.0",
+  "compiler": {
+    "type": "directory",
+    "contract-info.json": {
+      "type": "file",
+      "size": 12061,
+      "hash": "39a599e31468b58af1ff993b1c03b60ff7a5ceab179abdea359d89e174083d75"
+    }
+  },
+  "contract": {
+    "type": "directory",
+    "index.d.ts": {
+      "type": "file",
+      "size": 9297,
+      "hash": "ea8bb8db20de439223ec07380fc62d43e134f4bc57ea2a59233c8324ef0face2"
+    },
+    "index.js": {
+      "type": "file",
+      "size": 150364,
+      "hash": "e839c935d01e6f69c99260b69529587e3d0b75740714b9da71d6963987e64fb1"
+    },
+    "index.js.map": {
+      "type": "file",
+      "size": 7360,
+      "hash": "fc527abf7426b16b007c2d956a2b6a429034ac3c831a264f0ab10d92af7f570b"
+    }
+  },
+  "zkir": {
+    "type": "directory",
+    "attestSelectiveDisclosure.bzkir": {
+      "type": "file",
+      "size": 2176,
+      "hash": "2effbfba204fd63d56f8139fa91667a7180e2557e57fb70f4cc37983c130ef4c"
+    },
+    "attestSelectiveDisclosure.zkir": {
+      "type": "file",
+      "size": 6809,
+      "hash": "425e3ac299c746a7b3778ce52acdeee08564a4f2a91c0a68cf4e97c3c79ddc92"
+    },
+    "flagDispute.bzkir": {
+      "type": "file",
+      "size": 1988,
+      "hash": "d2ef6e5fe36bfe300db7613d73cb0b17d9220900e9ba5e3205b1bf9ad7a286d9"
+    },
+    "flagDispute.zkir": {
+      "type": "file",
+      "size": 6058,
+      "hash": "69303dd145efa889ed824065f0e8ff3d404aa09316426548c5ce7b307d417ded"
+    },
+    "fundDeal.bzkir": {
+      "type": "file",
+      "size": 1625,
+      "hash": "4d943bf0a5994da2a9b457531a5f24a3641ef225a38cb778edf01b1227b63746"
+    },
+    "fundDeal.zkir": {
+      "type": "file",
+      "size": 5088,
+      "hash": "b399275175ef2cbeaa8860e5662a6474e10ccb934f673b2422afed2710afeb05"
+    },
+    "pledgeInvoice.bzkir": {
+      "type": "file",
+      "size": 3642,
+      "hash": "0cf8e868ada68c3b18cd2dedf2b03c7ae9645d7e54df168533be45eb070effba"
+    },
+    "pledgeInvoice.zkir": {
+      "type": "file",
+      "size": 11868,
+      "hash": "dfef0b69a6f3481322c65bea55145ef451caab7cc068146b0d4f3e34b6bffb92"
+    },
+    "settleDeal.bzkir": {
+      "type": "file",
+      "size": 1625,
+      "hash": "5c1bef4094640f62d37e30e612bc238745fc705acca57cd2d63ea7bb6c194f8a"
+    },
+    "settleDeal.zkir": {
+      "type": "file",
+      "size": 5088,
+      "hash": "7bda2454b4a7560ffcb65d5a5d0d6ccf32c8af375f4de5903af7ed48aa7d46ac"
+    },
+    "updateRiskPolicy.bzkir": {
+      "type": "file",
+      "size": 1243,
+      "hash": "bd0768d7ec6c4dd09ef17f874c1c34002e474d623ebb20f91019ef9f55f26c78"
+    },
+    "updateRiskPolicy.zkir": {
+      "type": "file",
+      "size": 3910,
+      "hash": "2bebeb3de0b72a907b2b35d0d75de891aba1127732ce3d0a3dbf643295d29002"
+    }
+  },
+  "keys": {
+    "type": "directory",
+    "attestSelectiveDisclosure.prover": {
+      "type": "file",
+      "size": 22550928,
+      "hash": "cbba97109e7b5c54d255f40d98f3f3b15f231f8a680a7cb22fb4deb8ce791c2a"
+    },
+    "attestSelectiveDisclosure.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "c3bdd0df157ce13689e747be9210ef0381ee3a3c93e1d6dc325601aa4b5b6919"
+    },
+    "flagDispute.prover": {
+      "type": "file",
+      "size": 11278548,
+      "hash": "4ea9fa594fc53746bcf25f7ebb5ee4eace7506b45d9785ddffbefda412a3c068"
+    },
+    "flagDispute.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "0a72abc03d5e2c5860170a85998f07f8fef5e6104c816627b0361e1758c32950"
+    },
+    "fundDeal.prover": {
+      "type": "file",
+      "size": 11278185,
+      "hash": "224590a2bf2579da8f1e686db18c182a417807b88472833e18e40278d22786ba"
+    },
+    "fundDeal.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "efefddfac7685b3592af4f4d6991b863104381c3a4a6680c8c49ffe4ad04862b"
+    },
+    "pledgeInvoice.prover": {
+      "type": "file",
+      "size": 45096778,
+      "hash": "98c694012678444bc110fa1df6d2311f037dfd542d2fb33dc6c482f6f2c9fb2b"
+    },
+    "pledgeInvoice.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "6fe0ee9b55348204373143cd66364c772c0fc0c958cc68105c5eac7698a18ca5"
+    },
+    "settleDeal.prover": {
+      "type": "file",
+      "size": 11278185,
+      "hash": "8b05187426af8969a7eaf7cabcad7e9c3ca95442a5f03fc5038412d3ae99a7fc"
+    },
+    "settleDeal.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "494d1f1fdb8e61e05977cbf8bbe901367c280cca2e4b95746dcbbf7009ec5aa0"
+    },
+    "updateRiskPolicy.prover": {
+      "type": "file",
+      "size": 11277803,
+      "hash": "656e54b7a3b206cec9da964fe822199f4cc6c01766e4a1a34ecb4076c5533d53"
+    },
+    "updateRiskPolicy.verifier": {
+      "type": "file",
+      "size": 2121,
+      "hash": "31963019ad23e7687ae01c7ffc67f1afb72e945a6a6d2806c203af4c8a194f76"
+    }
+  }
+}

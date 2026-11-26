@@ -1,0 +1,14 @@
+{
+  "name": "veilfactor",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Zero-Knowledge Invoice Double-Pledge Prevention, Confidential Underwriting Covenants & Selective Auditor Disclosure on Midnight",
+  "scripts": {
+    "compact": "npm --prefix contract run compact",
+    "test:contract": "npm --prefix contract run test",
+    "test:web": "npm --prefix web run test",
+    "build:web": "npm --prefix web run build",
+    "verify": "npm --prefix contract run build && npm --prefix web run test && npm --prefix web run build"
+  }
+}

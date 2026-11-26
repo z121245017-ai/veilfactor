@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VeilFactor — Midnight Buildathon Wave 3 Pitch Deck</title>
+  <style>
+    :root {
+      --bg: #070a12; --card: #0f1524; --border: rgba(148,163,184,0.2);
+      --text: #eef2ff; --muted: #94a3b8; --accent: #7c6cf6; --cyan: #22d3ee; --green: #10b981;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #05070e; color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      display: flex; flex-direction: column; min-height: 100vh;
+    }
+    .nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 24px; background: var(--card); border-bottom: 1px solid var(--border);
+    }
+    .nav-btns { display: flex; gap: 8px; align-items: center; }
+    button, a.btn {
+      padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: #141c30; color: var(--text); font-weight: 600; font-size: 13px;
+      cursor: pointer; text-decoration: none;
+    }
+    button:hover, a.btn:hover { border-color: var(--cyan); }
+    .stage {
+      flex: 1; display: grid; place-items: center; padding: 24px;
+    }
+    .slide {
+      display: none; width: 100%; max-width: 1080px; min-height: 580px;
+      background: radial-gradient(circle at 85% 15%, rgba(124,108,246,0.18), transparent 45%), var(--card);
+      border: 1px solid var(--border); border-radius: 18px; padding: 44px 52px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    }
+    .slide.active { display: flex; flex-direction: column; justify-content: space-between; }
+    .kicker { font-size: 12px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--cyan); }
+    h1 { font-size: 42px; margin: 10px 0 14px; line-height: 1.12; }
+    h2 { font-size: 30px; margin: 8px 0 16px; line-height: 1.2; }
+    p.lead { font-size: 18px; color: #cbd5e1; max-width: 820px; line-height: 1.55; }
+    .cols { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; margin-top: 14px; }
+    .cols3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; margin-top: 14px; }
+    .box {
+      background: #090d18; border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px;
+    }
+    .box h3 { margin: 0 0 8px; font-size: 16px; color: #c7d2fe; }
+    .box p, .box li { color: #cbd5e1; font-size: 14px; line-height: 1.55; margin: 4px 0; }
+    .stat { font-size: 32px; font-weight: 800; color: var(--cyan); }
+    code { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: #a5b4fc; }
+    .footer { display: flex; justify-content: space-between; color: var(--muted); font-size: 12.5px; padding-top: 18px; border-top: 1px solid var(--border); margin-top: 18px; }
+    @media print {
+      .nav { display: none; }
+      .stage { display: block; padding: 0; }
+      .slide { display: flex !important; page-break-after: always; margin-bottom: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div><strong>VeilFactor</strong> · Midnight Buildathon Wave 3 Pitch Deck</div>
+    <div class="nav-btns">
+      <a class="btn" href="./index.html">← Live Interactive App</a>
+      <button onclick="go(-1)">← Prev</button>
+      <span id="counter" style="font-size:13px;color:#94a3b8;min-width:54px;text-align:center;">1 / 7</span>
+      <button onclick="go(1)">Next →</button>
+      <button onclick="window.print()">Print / Save PDF</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <section class="slide active">
+      <div>
+        <div class="kicker">MIDNIGHT BUILDATHON · WAVE 3 SUBMISSION · APACHE-2.0</div>
+        <h1>VeilFactor</h1>
+        <p class="lead">
+          Zero-Knowledge Invoice Double-Pledge Prevention, Private Buyer Concentration Covenants,
+          and Auditor-Scoped Selective Disclosure — built natively on Midnight Compact 0.36.1 (Ledger 9).
+        </p>
+        <div class="cols3" style="margin-top:26px;">
+          <div class="box"><div class="stat">$3T+</div><p>Annual global invoice factoring & trade finance volume exposed to duplicate financing fraud.</p></div>
+          <div class="box"><div class="stat">6 Circuits</div><p>Compiled Halo2 ZK circuits with real prover/verifier keys & ZKIR via <code>compact 0.36.1</code>.</p></div>
+          <div class="box"><div class="stat">0 Leaks</div><p>Raw buyer tax IDs, invoice values, exposures, and credit scores never touch the public ledger.</p></div>
+        </div>
+      </div>
+      <div class="footer"><span>Team: NovaCraft Studio (z121245017-ai)</span><span>Slide 1 / 7 · Use ← / → keys</span></div>
+    </section>
+
+    <section class="slide">
+      <div>
+        <div class="kicker">01 · THE REAL-WORLD PROBLEM</div>
+        <h2>Why Trade Finance Cannot Prevent Double-Pledging on Public Chains</h2>
+        <div class="cols">
+          <div class="box">
+            <h3>The Double-Financing Crisis</h3>
+            <p>Suppliers routinely pledge the exact same commercial receivable to Factor A and Factor B simultaneously (multi-billion dollar fraud class seen in Greensill and commodity trade finance).</p>
+            <p>Competing lenders refuse to pool invoice registries because sharing buyer names, SKU pricing, and credit limits reveals proprietary commercial relationships.</p>
+          </div>
+          <div class="box">
+            <h3>Why Traditional Blockchains Fail</h3>
+            <p>Public EVM ledgers expose invoice amounts, counterparties, and supplier liquidity distress to competitors and front-runners.</p>
+            <p>Private silos hide data but fail to stop a rogue supplier from financing the same invoice at a second desk.</p>
+            <p><strong style="color:#6ee7b7;">Midnight solves the exact paradox:</strong> global cryptographic uniqueness with programmable data protection.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer"><span>VeilFactor · Problem Statement</span><span>Slide 2 / 7</span></div>
+    </section>
+
+    <section class="slide">
+      <div>
+        <div class="kicker">02 · MIDNIGHT DUAL-LEDGER ARCHITECTURE</div>
+        <h2>Strict Separation of Private Local Witnesses & Public State</h2>
+        <div class="cols">
+          <div class="box" style="border-color:rgba(124,108,246,0.5);">
+            <h3>Private Local Prover (Witnesses — NEVER Disclosed)</h3>
+            <ul>
+              <li><code>localInvoiceDocHash()</code> — SHA-256 of commercial invoice PDF</li>
+              <li><code>localBuyerTaxHash()</code> — Buyer corporate tax identifier</li>
+              <li><code>localFaceValueCents()</code> — Exact commercial invoice value</li>
+              <li><code>localBuyerExposureCents()</code> — Existing portfolio concentration</li>
+              <li><code>localCreditScore()</code> — Exact supplier/buyer credit score</li>
+              <li><code>localSecretKey()</code> &amp; <code>localAuditorSecretKey()</code></li>
+            </ul>
+          </div>
+          <div class="box" style="border-color:rgba(34,211,238,0.5);">
+            <h3>Public Midnight Ledger (Zero-Leakage Commitments)</h3>
+            <ul>
+              <li><code>pledgedNullifiers: Set&lt;Bytes&lt;32&gt;&gt;</code> — Global double-pledge lock independent of wallet or salt</li>
+              <li><code>deals: Map&lt;Bytes&lt;32&gt;, DealSummary&gt;</code> — Salted commitment, auditor seal, coarse <code>RiskTier</code> &amp; <code>AmountBand</code></li>
+              <li>Aggregate protocol counters (<code>totalPledged</code>, <code>totalFunded</code>, <code>totalSettled</code>, <code>totalAuditorDisclosures</code>)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="footer"><span>VeilFactor · Dual-Ledger Privacy Model</span><span>Slide 3 / 7</span></div>
+    </section>
+
+    <section class="slide">
+      <div>
+        <div class="kicker">03 · COMPILED COMPACT 0.36.1 CIRCUIT SUITE</div>
+        <h2>6 Provable Circuits · End-to-End Multi-Party Lifecycle</h2>
+        <div class="cols3">
+          <div class="box"><h3>1. pledgeInvoice()</h3><p>Proves credit score floor, buyer concentration cap, Tier-C ≤80% advance guardrail, and deterministic anti-double-pledge nullifier uniqueness.</p></div>
+          <div class="box"><h3>2. fundDeal()</h3><p>Authenticates designated factor via domain-separated derived PK; locks deal into <code>FUNDED</code> state.</p></div>
+          <div class="box"><h3>3. settleDeal()</h3><p>Closes deal on buyer repayment while permanently retaining spent nullifier to block replay financing.</p></div>
+          <div class="box"><h3>4. flagDispute()</h3><p>Bilateral freeze callable by either supplier or factor; halts settlement pending compliance audit.</p></div>
+          <div class="box"><h3>5. attestSelectiveDisclosure()</h3><p>Designated auditor proves exact off-chain commercial dossier matches on-chain <code>disclosureSeal</code> without publishing raw figures.</p></div>
+          <div class="box"><h3>6. updateRiskPolicy()</h3><p>Protocol admin governance circuit tightening global credit floor, max advance bps, and concentration cap.</p></div>
+        </div>
+      </div>
+      <div class="footer"><span>VeilFactor · Contract Specification</span><span>Slide 4 / 7</span></div>
+    </section>
+
+    <section class="slide">
+      <div>
+        <div class="kicker">04 · VERIFICATION & QUALITY ASSURANCE</div>
+        <h2>Real Compact 0.36.1 Compilation + Live Browser WASM Execution</h2>
+        <div class="cols">
+          <div class="box">
+            <h3>Automated Contract &amp; Web Test Proofs</h3>
+            <ul>
+              <li><code>compact compile</code> (v0.36.1, <code>language_version 0.28.0</code>): <strong>6/6 circuits</strong> compiled with prover keys, verifier keys, and ZKIR.</li>
+              <li><strong>15/15</strong> Ledger-9 Vitest contract tests passing against <code>@midnight-ntwrk/compact-runtime@0.21.0</code>.</li>
+              <li>Automated privacy leakage assertion verifying zero raw secrets in serialized public state.</li>
+              <li>Adversarial tests: cross-wallet double-pledge revert, concentration breach revert, Tier-C cap revert, impostor factor/auditor revert, tampered audit figure revert.</li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3>Interactive Live Demo (Zero Setup)</h3>
+            <p>Our React + Vite web console embeds the real compiled Compact 0.36.1 Ledger-9 WASM runtime directly in-browser.</p>
+            <p>Judges can test legitimate pledges, rogue double-pledge attacks, factor funding, auditor selective disclosure, and inspect real <code>RunningCost</code> compute/write telemetry live.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer"><span>VeilFactor · Verified Engineering</span><span>Slide 5 / 7</span></div>
+    </section>
+
+    <section class="slide">
+      <div>
+        <div class="kicker">05 · BUSINESS MODEL & GO-TO-MARKET</div>
+        <h2>Clear Path to Institutional RWA &amp; Trade-Finance Adoption</h2>
+        <div class="cols">
+          <div class="box">
+            <h3>Target Customers</h3>
+            <ul>
+              <li><strong>On-Chain RWA Credit Protocols</strong> (private credit pools financing SME invoices without exposing borrower pipelines).</li>
+              <li><strong>Regional Factoring Desks &amp; Supply-Chain ERPs</strong> seeking shared anti-double-pledge registries without sharing client books.</li>
+              <li><strong>Compliance &amp; Audit Firms</strong> requiring cryptographic proof of portfolio covenants.</li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3>Monetization &amp; Defensibility</h3>
+            <ul>
+              <li><strong>Per-Pledge Registry Fee:</strong> 2–5 bps per financed invoice nullifier attestation (vs 50–150 bps fraud loss baseline).</li>
+              <li><strong>Enterprise Auditor Seat:</strong> SaaS key-management &amp; encrypted dossier vault for selective disclosure compliance.</li>
+              <li><strong>Network Effect:</strong> Every additional factor joining the shared Midnight nullifier set increases fraud-detection coverage for all lenders.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="footer"><span>VeilFactor · Business Viability</span><span>Slide 6 / 7</span></div>
+    </section>
+
+    <section class="slide">
+      <div>
+        <div class="kicker">06 · ROADMAP & MIDNIGHT BUILD CLUB</div>
+        <h2>From Wave 3 Verified Prototype to Preprod / Mainnet Production</h2>
+        <div class="cols3">
+          <div class="box"><h3>Wave 3 (Completed)</h3><p>Compiled Compact 0.36.1 6-circuit protocol, 15/15 Ledger-9 tests, live in-browser WASM dual-ledger console, pitch deck &amp; HD video demo.</p></div>
+          <div class="box"><h3>Phase 2 (Q1 2027)</h3><p>Midnight Preprod deployment with Lace wallet DApp Connector v4, real ZK proof-server pipeline, and ERP webhook ingestion (SAP / NetSuite).</p></div>
+          <div class="box"><h3>Phase 3 (Q2 2027)</h3><p>Cross-chain stablecoin settlement rails (Cardano + EVM bridge) and multi-lender syndicated factoring consortium pilot.</p></div>
+        </div>
+      </div>
+      <div class="footer"><span>VeilFactor · GitHub: z121245017-ai/veilfactor (Apache-2.0)</span><span>Slide 7 / 7</span></div>
+    </section>
+  </div>
+
+  <script>
+    let idx = 0;
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    function render() {
+      slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+      document.getElementById('counter').textContent = `${idx + 1} / ${slides.length}`;
+    }
+    function go(d) {
+      idx = Math.max(0, Math.min(slides.length - 1, idx + d));
+      render();
+    }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') go(1);
+      if (e.key === 'ArrowLeft') go(-1);
+    });
+  </script>
+</body>
+</html>
