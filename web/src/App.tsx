@@ -7,17 +7,21 @@ import {
   amountBandLabel,
   buildComplianceAttestationJson,
   computePortfolioLifecycleMetrics,
+  connectLaceMidnightWallet,
   createBootstrappedEngine,
   dealStatusLabel,
   evaluatePreFlightCovenants,
   extractLedgerDeals,
   riskTierLabel,
+  runAdversarialSecurityBench,
   runGuidedComplianceWalkthrough,
   scanPublicLedgerZeroLeakage,
   sha256,
   shortHex,
   toHex,
+  type AdversarialBenchReport,
   type DemoActors,
+  type LaceConnectionState,
   type LedgerDealItem,
   type PrivateDossierRecord,
   type TraceEvent,
@@ -64,6 +68,8 @@ export function App() {
   const [traces, setTraces] = useState<TraceEvent[]>([]);
   const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [laceState, setLaceState] = useState<LaceConnectionState | null>(null);
+  const [benchReport, setBenchReport] = useState<AdversarialBenchReport | null>(null);
 
   useEffect(() => {
     const win = window as unknown as { midnight?: { mnLace?: unknown } };
@@ -140,6 +146,42 @@ export function App() {
       setBanner({
         ok: false,
         text: `Walkthrough error: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConnectLace() {
+    const res = await connectLaceMidnightWallet();
+    setLaceState(res);
+    setLaceDetected(res.detected);
+    setBanner({ ok: true, text: res.note });
+  }
+
+  async function handleRunAdversarialBench() {
+    if (!sim || !actors || !activeDossier || busy) return;
+    setBusy(true);
+    try {
+      const report = await runAdversarialSecurityBench(sim, actors, activeDossier);
+      setBenchReport(report);
+      for (const r of report.results) {
+        appendTrace({
+          circuit: r.circuit,
+          actor: `Security Bench · ${r.id}`,
+          ok: !r.blocked,
+          message: r.blocked ? `BLOCKED: ${r.errorSummary}` : r.errorSummary,
+        });
+      }
+      setTick((t) => t + 1);
+      setBanner({
+        ok: report.allBlocked && report.leakageAfter.allClear,
+        text: `Adversarial Security Bench: ${report.passedCount}/${report.totalCount} live Compact 0.36.1 attack vectors BLOCKED (${report.leakageAfter.leaksFound}/${report.leakageAfter.checks.length} public leaks).`,
+      });
+    } catch (e) {
+      setBanner({
+        ok: false,
+        text: `Security Bench error: ${e instanceof Error ? e.message : String(e)}`,
       });
     } finally {
       setBusy(false);
@@ -456,9 +498,18 @@ export function App() {
             <span className="dot" />
             Compact 0.36.1 · Ledger-9 WASM Live
           </span>
-          <span className="pill accent">
-            {laceDetected ? "Lace Midnight Connector Detected" : "Local ZK Prover Active"}
-          </span>
+          <button
+            className="pill accent"
+            style={{ cursor: "pointer" }}
+            onClick={handleConnectLace}
+            title="Probe or connect Lace Midnight Wallet (window.midnight.mnLace)"
+          >
+            {laceState?.connected
+              ? `Lace Connected (${laceState.coinPublicKey?.slice(0, 8) ?? "mnLace"}…)`
+              : laceDetected
+                ? "Connect Lace Midnight Wallet"
+                : "Local ZK Prover · Probe Lace"}
+          </button>
           <a className="pill link" href="./deck.html" target="_blank" rel="noreferrer">
             Pitch Deck ↗
           </a>
@@ -952,8 +1003,8 @@ export function App() {
       {tab === "policy" && (
         <div className="card">
           <div className="card-head">
-            <h2 className="card-title">Global Risk Policy & Compiled Compact 0.36.1 Circuit Matrix</h2>
-            <span className="tag ok">6/6 HALO2 CIRCUITS COMPILED · 25/25 TESTS PASS</span>
+            <h2 className="card-title">Global Risk Policy, Adversarial Security Bench &amp; 6-Circuit Matrix</h2>
+            <span className="tag ok">6/6 HALO2 CIRCUITS COMPILED · 30/30 TESTS PASS</span>
           </div>
           <div className="form-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
             <div className="field">
@@ -976,8 +1027,42 @@ export function App() {
             <button className="btn btn-danger" disabled={busy} onClick={() => handleUpdatePolicy(false)}>
               Test Unauthorized Non-Admin Update
             </button>
+            <button
+              className="btn btn-secondary"
+              disabled={busy || !sim || !activeDossier}
+              onClick={handleRunAdversarialBench}
+            >
+              ▶ Run 5-Vector Adversarial ZK Security Bench
+            </button>
           </div>
           {banner && <div className={`banner ${banner.ok ? "ok" : "err"}`}>{banner.text}</div>}
+
+          {benchReport && (
+            <div className="diff-box pub" style={{ marginTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <strong style={{ fontSize: 13 }}>
+                  Live Compact 0.36.1 Adversarial Security Bench (Real Ledger-9 WASM Reverts)
+                </strong>
+                <span className={`tag ${benchReport.allBlocked && benchReport.leakageAfter.allClear ? "ok" : "err"}`}>
+                  {benchReport.passedCount}/{benchReport.totalCount} ATTACKS BLOCKED ·{" "}
+                  {benchReport.leakageAfter.leaksFound}/{benchReport.leakageAfter.checks.length} LEAKS
+                </span>
+              </div>
+              {benchReport.results.map((r) => (
+                <div key={r.id} className="kv" style={{ alignItems: "flex-start", gap: 10 }}>
+                  <span>
+                    <span className={`tag ${r.blocked ? "ok" : "err"}`} style={{ marginRight: 6 }}>
+                      {r.blocked ? "BLOCKED" : "FAIL"}
+                    </span>
+                    <strong>{r.title}</strong> (<code className="mono">{r.circuit}()</code>)
+                  </span>
+                  <code style={{ color: r.blocked ? "#6ee7b7" : "#fca5a5", maxWidth: "46%", textAlign: "right" }}>
+                    {r.errorSummary}
+                  </code>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="circuit-grid">
             <div className="circuit-card">

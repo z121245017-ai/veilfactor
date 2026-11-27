@@ -592,3 +592,190 @@ export async function runGuidedComplianceWalkthrough(
   const leakageAudit = scanPublicLedgerZeroLeakage(sim.getLedger(), dossier);
   return { dossier, traces, leakageAudit };
 }
+
+export interface AdversarialCheckResult {
+  id: string;
+  title: string;
+  circuit: string;
+  blocked: boolean;
+  errorSummary: string;
+}
+
+export interface AdversarialBenchReport {
+  passedCount: number;
+  totalCount: number;
+  allBlocked: boolean;
+  leakageAfter: ZeroLeakageAuditReport;
+  results: AdversarialCheckResult[];
+}
+
+export async function runAdversarialSecurityBench(
+  sim: VeilFactorSimulator,
+  actors: DemoActors,
+  targetDossier: PrivateDossierRecord,
+  nonce = String(Date.now()).slice(-5)
+): Promise<AdversarialBenchReport> {
+  const results: AdversarialCheckResult[] = [];
+
+  async function expectCircuitReject(
+    id: string,
+    title: string,
+    circuit: string,
+    fn: () => Promise<unknown>
+  ) {
+    try {
+      await fn();
+      results.push({
+        id,
+        title,
+        circuit,
+        blocked: false,
+        errorSummary: "UNEXPECTED PASS — attack was not rejected",
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      results.push({
+        id,
+        title,
+        circuit,
+        blocked: true,
+        errorSummary: msg.slice(0, 140),
+      });
+    }
+  }
+
+  const docHash = await sha256(targetDossier.invoiceRef);
+  const buyerTaxHash = await sha256(targetDossier.buyerTaxId);
+  const freshSalt = await sha256(`adversarial:salt:${nonce}:${targetDossier.invoiceRef}`);
+  const wrongFactorSk = targetDossier.factorId === "factor1" ? actors.factor2Sk : actors.factor1Sk;
+
+  await expectCircuitReject(
+    "double-pledge",
+    "Cross-Wallet Double-Pledge Replay (Fresh Shell + Salt)",
+    "pledgeInvoice",
+    () =>
+      sim.pledgeInvoice(actors.supplier2Sk, actors.factor2Pk, actors.auditorPk, 8000n, {
+        invoiceDocHash: docHash,
+        buyerTaxHash,
+        faceValueCents: BigInt(Math.round(targetDossier.faceValueUsd * 100)),
+        buyerExposureCents: BigInt(Math.round(targetDossier.buyerExposureUsd * 100)),
+        creditScore: BigInt(Math.round(targetDossier.creditScore)),
+        invoiceSalt: freshSalt,
+      })
+  );
+
+  await expectCircuitReject(
+    "impostor-factor",
+    "Impostor Factor Funding Hijack",
+    "fundDeal",
+    () => sim.fundDeal(wrongFactorSk, targetDossier.nullifier)
+  );
+
+  await expectCircuitReject(
+    "tampered-seal",
+    "+$1.00 Tampered Off-Chain Auditor Dossier",
+    "attestSelectiveDisclosure",
+    () =>
+      sim.attestSelectiveDisclosure(
+        actors.auditorSk,
+        targetDossier.nullifier,
+        BigInt(Math.round(targetDossier.faceValueUsd * 100)) + 100n,
+        BigInt(Math.round(targetDossier.creditScore))
+      )
+  );
+
+  await expectCircuitReject(
+    "tier-c-guardrail",
+    "Tier-C Credit Score (650) Exceeding 80% Advance Cap",
+    "pledgeInvoice",
+    async () =>
+      sim.pledgeInvoice(actors.supplier1Sk, actors.factor1Pk, actors.auditorPk, 8500n, {
+        invoiceDocHash: await sha256(`ADV-TIERC-${nonce}`),
+        buyerTaxHash: await sha256("US-94-3019822"),
+        faceValueCents: 1_800_000n,
+        buyerExposureCents: 4_000_000n,
+        creditScore: 650n,
+        invoiceSalt: await sha256(`adv:tierc:${nonce}`),
+      })
+  );
+
+  await expectCircuitReject(
+    "non-admin-policy",
+    "Unauthorized Non-Admin Risk Policy Takeover",
+    "updateRiskPolicy",
+    () =>
+      sim.updateRiskPolicy(actors.supplier1Sk, {
+        minCreditScore: 500n,
+        maxAdvanceBps: 9500n,
+        maxBuyerConcentrationCents: 500_000_000n,
+      })
+  );
+
+  const passedCount = results.filter((r) => r.blocked).length;
+  const leakageAfter = scanPublicLedgerZeroLeakage(sim.getLedger(), targetDossier);
+  return {
+    passedCount,
+    totalCount: results.length,
+    allBlocked: passedCount === results.length,
+    leakageAfter,
+    results,
+  };
+}
+
+export interface LaceConnectionState {
+  detected: boolean;
+  connected: boolean;
+  coinPublicKey?: string;
+  encryptionPublicKey?: string;
+  proverServerUri?: string;
+  note: string;
+}
+
+interface MidnightLaceApi {
+  enable?: () => Promise<{
+    state?: () => Promise<{ coinPublicKey?: string; encryptionPublicKey?: string }>;
+  }>;
+  serviceUriConfig?: () => Promise<{
+    proverServerUri?: string;
+    indexerUri?: string;
+    substrateNodeUri?: string;
+  }>;
+}
+
+export async function connectLaceMidnightWallet(
+  winObj: unknown = typeof window !== "undefined" ? window : undefined
+): Promise<LaceConnectionState> {
+  const mnLace = (winObj as { midnight?: { mnLace?: MidnightLaceApi } } | undefined)?.midnight
+    ?.mnLace;
+  if (!mnLace || typeof mnLace.enable !== "function") {
+    return {
+      detected: false,
+      connected: false,
+      note: "Lace Midnight Wallet extension not detected in browser — running full compiled Compact 0.36.1 Ledger-9 WASM runtime locally (0 setup required).",
+    };
+  }
+  try {
+    const api = await mnLace.enable();
+    const st = typeof api?.state === "function" ? await api.state() : undefined;
+    const uris =
+      typeof mnLace.serviceUriConfig === "function" ? await mnLace.serviceUriConfig() : undefined;
+    return {
+      detected: true,
+      connected: true,
+      coinPublicKey: st?.coinPublicKey,
+      encryptionPublicKey: st?.encryptionPublicKey,
+      proverServerUri: uris?.proverServerUri,
+      note: `Connected to Lace Midnight Wallet${
+        st?.coinPublicKey ? ` (${st.coinPublicKey.slice(0, 12)}…)` : ""
+      }${uris?.proverServerUri ? ` · Prover: ${uris.proverServerUri}` : ""}.`,
+    };
+  } catch (e) {
+    return {
+      detected: true,
+      connected: false,
+      note: `Lace Midnight Wallet detected but connection declined: ${
+        e instanceof Error ? e.message : String(e)
+      }. Continuing on local Compact 0.36.1 WASM prover.`,
+    };
+  }
+}

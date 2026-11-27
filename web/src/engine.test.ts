@@ -7,12 +7,15 @@ import {
   RiskTier,
   buildComplianceAttestationJson,
   computePortfolioLifecycleMetrics,
+  connectLaceMidnightWallet,
   createBootstrappedEngine,
   evaluatePreFlightCovenants,
   extractLedgerDeals,
+  runAdversarialSecurityBench,
   runGuidedComplianceWalkthrough,
   scanPublicLedgerZeroLeakage,
   sha256,
+  toHex,
 } from "./veilfactorEngine";
 
 describe("VeilFactor Web Engine (Compact 0.36.1 WASM)", () => {
@@ -178,5 +181,93 @@ describe("VeilFactor Web Engine (Compact 0.36.1 WASM)", () => {
     expect(metrics.blockedCalls).toBe(1);
     expect(metrics.totalComputeTime).toBeGreaterThan(0n);
     expect(metrics.totalBytesWritten).toBeGreaterThan(0n);
+  });
+
+  it("blocks all 5 adversarial Compact 0.36.1 attack vectors with 0/7 leaks and zero state mutation", async () => {
+    const { sim, actors, initialDossier } = await createBootstrappedEngine();
+    const dealsBefore = extractLedgerDeals(sim.getLedger()).length;
+    const report = await runAdversarialSecurityBench(sim, actors, initialDossier, "BENCH1");
+    expect(report.totalCount).toBe(5);
+    expect(report.passedCount).toBe(5);
+    expect(report.allBlocked).toBe(true);
+    expect(report.leakageAfter.allClear).toBe(true);
+    expect(report.leakageAfter.leaksFound).toBe(0);
+    expect(extractLedgerDeals(sim.getLedger()).length).toBe(dealsBefore);
+  });
+
+  it("blocks impostor factor1 hijack when running adversarial bench on a factor2-assigned deal", async () => {
+    const { sim, actors } = await createBootstrappedEngine();
+    const docHash = await sha256("INV-2026-FACTOR2-ONLY");
+    const taxHash = await sha256("JP-1010001012345");
+    const exec = await sim.pledgeInvoice(actors.supplier1Sk, actors.factor2Pk, actors.auditorPk, 8200n, {
+      invoiceDocHash: docHash,
+      buyerTaxHash: taxHash,
+      faceValueCents: 12_000_000n,
+      buyerExposureCents: 20_000_000n,
+      creditScore: 760n,
+      invoiceSalt: await sha256("salt-factor2"),
+    });
+    const dossier = {
+      nullifierHex: toHex(exec.result),
+      nullifier: exec.result,
+      invoiceRef: "INV-2026-FACTOR2-ONLY",
+      buyerTaxId: "JP-1010001012345",
+      faceValueUsd: 120000,
+      buyerExposureUsd: 200000,
+      creditScore: 760,
+      factorLabel: "Horizon Credit",
+      factorId: "factor2" as const,
+      docHashHex: toHex(docHash),
+      buyerTaxHashHex: toHex(taxHash),
+    };
+    const report = await runAdversarialSecurityBench(sim, actors, dossier, "BENCH2");
+    expect(report.allBlocked).toBe(true);
+    expect(report.results.find((r) => r.id === "impostor-factor")?.blocked).toBe(true);
+  });
+
+  it("returns graceful local-WASM fallback when Lace Midnight Wallet is absent", async () => {
+    const res = await connectLaceMidnightWallet({});
+    expect(res.detected).toBe(false);
+    expect(res.connected).toBe(false);
+    expect(res.note).toContain("Compact 0.36.1");
+  });
+
+  it("connects to injected Lace Midnight DApp Connector provider and reads keys + prover URI", async () => {
+    const mockWin = {
+      midnight: {
+        mnLace: {
+          enable: async () => ({
+            state: async () => ({
+              coinPublicKey: "mn_shield-cpk_preprod1demo123456",
+              encryptionPublicKey: "mn_shield-epk_preprod1demo654321",
+            }),
+          }),
+          serviceUriConfig: async () => ({
+            proverServerUri: "http://127.0.0.1:6300",
+          }),
+        },
+      },
+    };
+    const res = await connectLaceMidnightWallet(mockWin);
+    expect(res.detected).toBe(true);
+    expect(res.connected).toBe(true);
+    expect(res.coinPublicKey).toContain("mn_shield-cpk");
+    expect(res.proverServerUri).toBe("http://127.0.0.1:6300");
+  });
+
+  it("handles Lace connection rejection gracefully without throwing", async () => {
+    const mockWin = {
+      midnight: {
+        mnLace: {
+          enable: async () => {
+            throw new Error("User rejected authorization");
+          },
+        },
+      },
+    };
+    const res = await connectLaceMidnightWallet(mockWin);
+    expect(res.detected).toBe(true);
+    expect(res.connected).toBe(false);
+    expect(res.note).toContain("User rejected authorization");
   });
 });
