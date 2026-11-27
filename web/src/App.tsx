@@ -6,10 +6,13 @@ import {
   DealStatus,
   amountBandLabel,
   buildComplianceAttestationJson,
+  computePortfolioLifecycleMetrics,
   createBootstrappedEngine,
   dealStatusLabel,
+  evaluatePreFlightCovenants,
   extractLedgerDeals,
   riskTierLabel,
+  runGuidedComplianceWalkthrough,
   scanPublicLedgerZeroLeakage,
   sha256,
   shortHex,
@@ -19,6 +22,7 @@ import {
   type PrivateDossierRecord,
   type TraceEvent,
 } from "./veilfactorEngine";
+import { CovenantGaugeChart, LifecycleFunnelChart } from "./PrivacyCharts";
 import type { VeilFactorSimulator } from "../../contract/src/index.ts";
 
 type TabKey = "pledge" | "lifecycle" | "auditor" | "policy";
@@ -95,6 +99,52 @@ export function App() {
     if (!ledger || !activeDossier) return null;
     return scanPublicLedgerZeroLeakage(ledger, activeDossier);
   }, [ledger, activeDossier]);
+
+  const preFlight = useMemo(
+    () =>
+      evaluatePreFlightCovenants(
+        {
+          faceValueUsd: Number(faceValueUsd),
+          buyerExposureUsd: Number(buyerExposureUsd),
+          creditScore: Number(creditScore),
+          advancePct: Number(advancePct),
+        },
+        ledger
+      ),
+    [faceValueUsd, buyerExposureUsd, creditScore, advancePct, ledger]
+  );
+
+  const lifecycleMetrics = useMemo(
+    () => computePortfolioLifecycleMetrics(deals, traces),
+    [deals, traces]
+  );
+
+  async function handleRunGuidedWalkthrough() {
+    if (!sim || !actors || busy) return;
+    setBusy(true);
+    try {
+      const res = await runGuidedComplianceWalkthrough(sim, actors);
+      setDossiers((prev) => ({ ...prev, [res.dossier.nullifierHex]: res.dossier }));
+      setSelectedDealHex(res.dossier.nullifierHex);
+      setAuditFaceUsd(String(res.dossier.faceValueUsd));
+      setAuditScore(String(res.dossier.creditScore));
+      for (const tr of res.traces) {
+        appendTrace(tr);
+      }
+      setTick((t) => t + 1);
+      setBanner({
+        ok: true,
+        text: `4-Step Guided ZK Walkthrough complete: ${res.dossier.invoiceRef} pledged, cross-wallet double-pledge BLOCKED, factor funded, auditor attested (${res.leakageAudit.leaksFound}/${res.leakageAudit.checks.length} public leaks).`,
+      });
+    } catch (e) {
+      setBanner({
+        ok: false,
+        text: `Walkthrough error: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function handleExportComplianceReceipt() {
     if (!activeDeal) return;
@@ -545,12 +595,26 @@ export function App() {
               </div>
             </div>
 
+            <CovenantGaugeChart
+              report={preFlight}
+              existingExposureUsd={Number(buyerExposureUsd) || 0}
+              faceValueUsd={Number(faceValueUsd) || 0}
+              creditScore={Number(creditScore) || 0}
+            />
+
             <div className="actions">
               <button className="btn btn-primary" disabled={busy || !sim} onClick={() => handlePledge(false)}>
                 Run pledgeInvoice() Compact Circuit
               </button>
               <button className="btn btn-danger" disabled={busy || !sim} onClick={() => handlePledge(true)}>
                 Simulate Rogue Double-Pledge Attack
+              </button>
+              <button
+                className="btn btn-secondary"
+                disabled={busy || !sim}
+                onClick={handleRunGuidedWalkthrough}
+              >
+                ▶ Run 4-Step ZK Walkthrough
               </button>
             </div>
 
@@ -665,6 +729,7 @@ export function App() {
             <h2 className="card-title">On-Chain Midnight Ledger Deal Book</h2>
             <span className="tag pub">LIVE ledger(state).deals READBACK</span>
           </div>
+          <LifecycleFunnelChart metrics={lifecycleMetrics} />
           {banner && (
             <div className={`banner ${banner.ok ? "ok" : "err"}`} style={{ marginTop: 0, marginBottom: 10 }}>
               {banner.text}
@@ -888,7 +953,7 @@ export function App() {
         <div className="card">
           <div className="card-head">
             <h2 className="card-title">Global Risk Policy & Compiled Compact 0.36.1 Circuit Matrix</h2>
-            <span className="tag ok">6/6 HALO2 CIRCUITS COMPILED · 15/15 TESTS PASS</span>
+            <span className="tag ok">6/6 HALO2 CIRCUITS COMPILED · 25/25 TESTS PASS</span>
           </div>
           <div className="form-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
             <div className="field">

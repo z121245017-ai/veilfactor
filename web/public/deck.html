@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link
+    rel="icon"
+    type="image/svg+xml"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c6cf6'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='system-ui,sans-serif' font-weight='800' font-size='28' fill='%23050810'%3EVF%3C/text%3E%3C/svg%3E"
+  />
   <title>VeilFactor — Midnight Buildathon Wave 3 Pitch Deck</title>
   <style>
     :root {
@@ -162,14 +167,14 @@
             <h3>Automated Contract &amp; Web Test Proofs</h3>
             <ul>
               <li><code>compact compile</code> (v0.36.1, <code>language_version 0.28.0</code>): <strong>6/6 circuits</strong> compiled with prover keys, verifier keys, and ZKIR.</li>
-              <li><strong>15/15</strong> Ledger-9 Vitest contract tests passing against <code>@midnight-ntwrk/compact-runtime@0.21.0</code>.</li>
-              <li>Automated privacy leakage assertion verifying zero raw secrets in serialized public state.</li>
+              <li><strong>25/25</strong> automated Vitest tests passing (<strong>15</strong> Ledger-9 contract + <strong>10</strong> browser WASM &amp; privacy-audit tests).</li>
+              <li>Live <strong>Public State Zero-Leakage Byte Scanner</strong> verifying <code>0/7</code> private witness leaks + verifiable JSON compliance attestation export.</li>
               <li>Adversarial tests: cross-wallet double-pledge revert, concentration breach revert, Tier-C cap revert, impostor factor/auditor revert, tampered audit figure revert.</li>
             </ul>
           </div>
           <div class="box">
             <h3>Interactive Live Demo (Zero Setup)</h3>
-            <p>Our React + Vite web console embeds the real compiled Compact 0.36.1 Ledger-9 WASM runtime directly in-browser.</p>
+            <p>Our React + Vite web console embeds the real compiled Compact 0.36.1 Ledger-9 WASM runtime directly in-browser with real-time <strong>Pre-Flight Covenant Gauges</strong> and a <strong>1-Click 4-Step ZK Compliance Walkthrough</strong>.</p>
             <p>Judges can test legitimate pledges, rogue double-pledge attacks, factor funding, auditor selective disclosure, and inspect real <code>RunningCost</code> compute/write telemetry live.</p>
           </div>
         </div>
@@ -208,7 +213,7 @@
         <div class="kicker">06 · ROADMAP & MIDNIGHT BUILD CLUB</div>
         <h2>From Wave 3 Verified Prototype to Preprod / Mainnet Production</h2>
         <div class="cols3">
-          <div class="box"><h3>Wave 3 (Completed)</h3><p>Compiled Compact 0.36.1 6-circuit protocol, 15/15 Ledger-9 tests, live in-browser WASM dual-ledger console, pitch deck &amp; HD video demo.</p></div>
+          <div class="box"><h3>Wave 3 (Completed)</h3><p>Compiled Compact 0.36.1 6-circuit protocol, 25/25 passing tests, live in-browser WASM console with covenant gauges, 1-click 4-step walkthrough, zero-leakage byte scanner &amp; attestation export.</p></div>
           <div class="box"><h3>Phase 2 (Q1 2027)</h3><p>Midnight Preprod deployment with Lace wallet DApp Connector v4, real ZK proof-server pipeline, and ERP webhook ingestion (SAP / NetSuite).</p></div>
           <div class="box"><h3>Phase 3 (Q2 2027)</h3><p>Cross-chain stablecoin settlement rails (Cardano + EVM bridge) and multi-lender syndicated factoring consortium pilot.</p></div>
         </div>
