@@ -779,3 +779,130 @@ export async function connectLaceMidnightWallet(
     };
   }
 }
+
+export const PRIVATE_VAULT_STORAGE_KEY = "veilfactor:private-witness-vault:v1";
+
+export interface PrivateStateBoundarySummary {
+  privateDossierCount: number;
+  privateFieldsKeptOffChain: number;
+  publicLedgerDeals: number;
+  publicNullifiers: number;
+  serializedPublicBytes: number;
+}
+
+interface StorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+interface SerializedDossier {
+  nullifierHex: string;
+  invoiceRef: string;
+  buyerTaxId: string;
+  faceValueUsd: number;
+  buyerExposureUsd: number;
+  creditScore: number;
+  factorLabel: string;
+  factorId: "factor1" | "factor2";
+  docHashHex: string;
+  buyerTaxHashHex: string;
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const out = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
+export function savePrivateDossiersToVault(
+  dossiers: Record<string, PrivateDossierRecord>,
+  storage: StorageLike | undefined = typeof window !== "undefined" ? window.localStorage : undefined
+): number {
+  if (!storage) return 0;
+  const entries: SerializedDossier[] = Object.values(dossiers).map((d) => ({
+    nullifierHex: d.nullifierHex,
+    invoiceRef: d.invoiceRef,
+    buyerTaxId: d.buyerTaxId,
+    faceValueUsd: d.faceValueUsd,
+    buyerExposureUsd: d.buyerExposureUsd,
+    creditScore: d.creditScore,
+    factorLabel: d.factorLabel,
+    factorId: d.factorId,
+    docHashHex: d.docHashHex,
+    buyerTaxHashHex: d.buyerTaxHashHex,
+  }));
+  storage.setItem(
+    PRIVATE_VAULT_STORAGE_KEY,
+    JSON.stringify({ schemaVersion: 1, savedAt: new Date().toISOString(), entries })
+  );
+  return entries.length;
+}
+
+export function loadPrivateDossiersFromVault(
+  storage: StorageLike | undefined = typeof window !== "undefined" ? window.localStorage : undefined
+): Record<string, PrivateDossierRecord> {
+  if (!storage) return {};
+  try {
+    const raw = storage.getItem(PRIVATE_VAULT_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as { schemaVersion?: number; entries?: SerializedDossier[] };
+    if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed.entries)) return {};
+    const out: Record<string, PrivateDossierRecord> = {};
+    for (const e of parsed.entries) {
+      if (!e || typeof e.nullifierHex !== "string") continue;
+      out[e.nullifierHex] = {
+        nullifierHex: e.nullifierHex,
+        nullifier: hexToBytes(e.nullifierHex),
+        invoiceRef: String(e.invoiceRef),
+        buyerTaxId: String(e.buyerTaxId),
+        faceValueUsd: Number(e.faceValueUsd),
+        buyerExposureUsd: Number(e.buyerExposureUsd),
+        creditScore: Number(e.creditScore),
+        factorLabel: String(e.factorLabel),
+        factorId: e.factorId === "factor2" ? "factor2" : "factor1",
+        docHashHex: String(e.docHashHex),
+        buyerTaxHashHex: String(e.buyerTaxHashHex),
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function clearPrivateDossiersVault(
+  storage: StorageLike | undefined = typeof window !== "undefined" ? window.localStorage : undefined
+): void {
+  storage?.removeItem(PRIVATE_VAULT_STORAGE_KEY);
+}
+
+export function computePrivateVsPublicBoundary(
+  sim: VeilFactorSimulator,
+  dossiers: Record<string, PrivateDossierRecord>
+): PrivateStateBoundarySummary {
+  const ledger = sim.getLedger();
+  const privateDossierCount = Object.keys(dossiers).length;
+  const serialized = JSON.stringify({
+    nullifiers: Array.from(ledger.pledgedNullifiers, (n) => toHex(n)),
+    deals: extractLedgerDeals(ledger).map((d) => ({
+      nullifier: d.nullifierHex,
+      commitment: toHex(d.summary.invoiceCommitment),
+      seal: toHex(d.summary.disclosureSeal),
+      riskTier: d.summary.riskTier,
+      amountBand: d.summary.amountBand,
+      status: d.summary.status,
+    })),
+  });
+  return {
+    privateDossierCount,
+    // 7 confidential witness fields per dossier kept strictly off-chain
+    privateFieldsKeptOffChain: privateDossierCount * 7,
+    publicLedgerDeals: Number(ledger.deals.size()),
+    publicNullifiers: Number(ledger.pledgedNullifiers.size()),
+    serializedPublicBytes: new TextEncoder().encode(serialized).byteLength,
+  };
+}

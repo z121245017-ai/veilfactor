@@ -16,6 +16,10 @@ import {
   scanPublicLedgerZeroLeakage,
   sha256,
   toHex,
+  savePrivateDossiersToVault,
+  loadPrivateDossiersFromVault,
+  clearPrivateDossiersVault,
+  computePrivateVsPublicBoundary,
 } from "./veilfactorEngine";
 
 describe("VeilFactor Web Engine (Compact 0.36.1 WASM)", () => {
@@ -269,5 +273,42 @@ describe("VeilFactor Web Engine (Compact 0.36.1 WASM)", () => {
     expect(res.detected).toBe(true);
     expect(res.connected).toBe(false);
     expect(res.note).toContain("User rejected authorization");
+  });
+
+  it("persists, reloads, and clears local Private Witness Vault dossiers cleanly", async () => {
+    const boot = await createBootstrappedEngine();
+    const dossiers = { [boot.initialDossier.nullifierHex]: boot.initialDossier };
+    const mem = new Map<string, string>();
+    const mockStorage = {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        mem.set(k, v);
+      },
+      removeItem: (k: string) => {
+        mem.delete(k);
+      },
+    };
+    const saved = savePrivateDossiersToVault(dossiers, mockStorage);
+    expect(saved).toBe(1);
+    const reloaded = loadPrivateDossiersFromVault(mockStorage);
+    const orig = boot.initialDossier;
+    expect(reloaded[orig.nullifierHex].faceValueUsd).toBe(orig.faceValueUsd);
+    expect(reloaded[orig.nullifierHex].buyerTaxId).toBe(orig.buyerTaxId);
+    expect(reloaded[orig.nullifierHex].creditScore).toBe(orig.creditScore);
+    expect(reloaded[orig.nullifierHex].nullifier).toEqual(orig.nullifier);
+
+    clearPrivateDossiersVault(mockStorage);
+    expect(Object.keys(loadPrivateDossiersFromVault(mockStorage)).length).toBe(0);
+  });
+
+  it("reports exact private-vs-public dual-ledger boundary inventory", async () => {
+    const boot = await createBootstrappedEngine();
+    const dossiers = { [boot.initialDossier.nullifierHex]: boot.initialDossier };
+    const inv = computePrivateVsPublicBoundary(boot.sim, dossiers);
+    expect(inv.privateDossierCount).toBe(1);
+    expect(inv.privateFieldsKeptOffChain).toBe(7);
+    expect(inv.publicLedgerDeals).toBe(1);
+    expect(inv.publicNullifiers).toBe(1);
+    expect(inv.serializedPublicBytes).toBeGreaterThan(0);
   });
 });

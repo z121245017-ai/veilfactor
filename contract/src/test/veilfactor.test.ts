@@ -436,4 +436,118 @@ describe("VeilFactor Compact 0.36.1 ZK Smart Contract", async () => {
     ]);
     expect(unique.size).toBe(4);
   });
+
+  it("property invariant: 20 randomized invoices satisfy zero-leakage and tier/band classification", async () => {
+    const sim = await VeilFactorSimulator.create(adminSk);
+    for (let i = 0; i < 20; i++) {
+      // Deterministic pseudo-random spread across valid score (620..845), face value ($2k..$900k), exposure
+      const creditScore = BigInt(620 + ((i * 37) % 225));
+      const faceValueCents = BigInt(200_000 + ((i * 4_321_987) % 85_000_000));
+      const buyerExposureCents = BigInt((i * 1_111_111) % 10_000_000);
+      const isTierC = creditScore < 680n;
+      const requestedAdvanceBps = isTierC ? 7800n : 8500n;
+      const docHash = await sha256(`PROP-INV-${i}-DOC-${faceValueCents}`);
+      const buyerTaxHash = await sha256(`PROP-BUYER-${i % 7}`);
+      const salt = await sha256(`PROP-SALT-${i}`);
+
+      const { result: nullifier } = await sim.pledgeInvoice(
+        supplier1Sk,
+        factor1Pk,
+        auditorPk,
+        requestedAdvanceBps,
+        {
+          invoiceDocHash: docHash,
+          buyerTaxHash,
+          faceValueCents,
+          buyerExposureCents,
+          creditScore,
+          invoiceSalt: salt,
+        }
+      );
+
+      const deal = sim.lookupDeal(nullifier);
+      const expectedTier =
+        creditScore >= 760n
+          ? RiskTier.TIER_A_PRIME
+          : creditScore >= 680n
+            ? RiskTier.TIER_B_STANDARD
+            : RiskTier.TIER_C_ENHANCED;
+      const expectedBand =
+        faceValueCents < 2_500_000n
+          ? AmountBand.BAND_MICRO
+          : faceValueCents < 25_000_000n
+            ? AmountBand.BAND_MID
+            : AmountBand.BAND_INSTITUTIONAL;
+      expect(deal.riskTier).toBe(expectedTier);
+      expect(deal.amountBand).toBe(expectedBand);
+
+      // Verify zero raw witness leakage in serialized public deal summary
+      const publicDump = JSON.stringify({
+        supplierPk: toHex(deal.supplierPk),
+        factorPk: toHex(deal.factorPk),
+        auditorPk: toHex(deal.auditorPk),
+        commitment: toHex(deal.invoiceCommitment),
+        seal: toHex(deal.disclosureSeal),
+        riskTier: deal.riskTier,
+        amountBand: deal.amountBand,
+        advanceBps: deal.advanceBps.toString(),
+      });
+      expect(publicDump).not.toContain(toHex(docHash));
+      expect(publicDump).not.toContain(toHex(buyerTaxHash));
+      expect(publicDump).not.toContain(toHex(salt));
+      expect(publicDump).not.toContain(faceValueCents.toString());
+    }
+    expect(sim.getLedger().totalPledged).toBe(20n);
+    expect(sim.getLedger().pledgedNullifiers.size()).toBe(20n);
+  });
+
+  it("property invariant: cross-wallet & cross-salt replay is rejected 100% of the time across 10 trials", async () => {
+    const sim = await VeilFactorSimulator.create(adminSk);
+    for (let i = 0; i < 10; i++) {
+      const docHash = await sha256(`REPLAY-DOC-${i}`);
+      const buyerTaxHash = await sha256(`REPLAY-BUYER-${i}`);
+      await sim.pledgeInvoice(supplier1Sk, factor1Pk, auditorPk, 8200n, {
+        invoiceDocHash: docHash,
+        buyerTaxHash,
+        faceValueCents: 1_500_000n + BigInt(i) * 250_000n,
+        buyerExposureCents: 0n,
+        creditScore: 770n,
+        invoiceSalt: await sha256(`ORIG-SALT-${i}`),
+      });
+      // Second supplier wallet + fresh salt + different factor MUST fail inside Compact ZK circuit
+      const shellSupplierSk = await sha256(`SHELL-WALLET-${i}`);
+      const secondFactorPk = pureCircuits.deriveFactorPk(await sha256(`FACTOR-B-${i}`));
+      await expect(
+        sim.pledgeInvoice(shellSupplierSk, secondFactorPk, auditorPk, 8000n, {
+          invoiceDocHash: docHash,
+          buyerTaxHash,
+          faceValueCents: 1_500_000n + BigInt(i) * 250_000n,
+          buyerExposureCents: 0n,
+          creditScore: 810n,
+          invoiceSalt: await sha256(`FRESH-SALT-${i}`),
+        })
+      ).rejects.toThrow("Double-pledge blocked");
+    }
+    expect(sim.getLedger().pledgedNullifiers.size()).toBe(10n);
+  });
+
+  it("property invariant: Tier-C (<680 score) advance > 8000 bps is always rejected across boundary scores", async () => {
+    const sim = await VeilFactorSimulator.create(adminSk);
+    for (const score of [620n, 650n, 679n]) {
+      await expect(
+        sim.pledgeInvoice(supplier1Sk, factor1Pk, auditorPk, 8001n, {
+          ...validInvoiceA,
+          invoiceDocHash: await sha256(`TIERC-FAIL-${score}`),
+          creditScore: score,
+        })
+      ).rejects.toThrow("Tier C invoices capped at 80% advance rate");
+    }
+    // Score 680 (Tier-B boundary) at 8001 bps MUST succeed
+    const { result } = await sim.pledgeInvoice(supplier1Sk, factor1Pk, auditorPk, 8001n, {
+      ...validInvoiceA,
+      invoiceDocHash: await sha256("TIERB-PASS-680"),
+      creditScore: 680n,
+    });
+    expect(sim.lookupDeal(result).riskTier).toBe(RiskTier.TIER_B_STANDARD);
+  });
 });
