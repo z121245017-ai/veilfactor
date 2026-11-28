@@ -1004,7 +1004,7 @@ export function App() {
         <div className="card">
           <div className="card-head">
             <h2 className="card-title">Global Risk Policy, Adversarial Security Bench &amp; 6-Circuit Matrix</h2>
-            <span className="tag ok">6/6 HALO2 CIRCUITS COMPILED · 30/30 TESTS PASS</span>
+            <span className="tag ok">6/6 HALO2 CIRCUITS COMPILED · 35/35 TESTS PASS</span>
           </div>
           <div className="form-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
             <div className="field">
